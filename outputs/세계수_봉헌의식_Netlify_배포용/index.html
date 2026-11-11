@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="반인반식의 삶을 기록한 장식을 세계수에 봉헌하는 3D 체험">
+  <title>세계수 봉헌의식</title>
+  <link rel="stylesheet" href="./src/style.css?v=12">
+  <script type="importmap">{"imports":{"three":"./vendor/three/build/three.module.js"}}</script>
+</head>
+<body>
+  <div id="backdrop" aria-hidden="true"></div>
+  <div id="world" aria-label="세계수 3D 장면"></div>
+  <div id="veil" aria-hidden="true"></div>
+  <header class="masthead">
+    <a class="brand" href="./" aria-label="세계수 봉헌의식 시작 화면">
+      <svg viewBox="0 0 42 42" width="36" height="36" aria-hidden="true"><circle cx="21" cy="21" r="17"/><circle cx="21" cy="21" r="12"/><circle cx="21" cy="21" r="7"/><path d="M21 4v34M6.3 12.5l29.4 17M6.3 29.5l29.4-17"/></svg>
+      <span>세계수 봉헌의식</span>
+    </a>
+    <nav aria-label="주 메뉴"><a href="./#lives" id="ritual-link">봉헌하기</a><a href="./?page=archive" id="archive-link">봉헌 기록</a></nav>
+  </header>
+  <main id="app"></main>
+  <p id="status" role="status" aria-live="polite"></p>
+  <script type="module" src="./src/app.js?v=30"></script>
+</body>
+</html>
