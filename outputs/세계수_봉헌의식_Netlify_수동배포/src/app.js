@@ -310,12 +310,13 @@ function altar(ready=false, focus=true) {
     void draw(record,false);
   }
 }
-function errorView() {
+function errorView(error) {
+  console.error('봉헌 공간을 불러오지 못했습니다.', error);
   show('error','<section class="layout"><h1>공간을 열 수 없습니다</h1><p class="lede">3D 자료를 다시 불러와 보세요. 완료한 봉헌은 기록에서 열 수 있습니다.</p>'+actions(button('retry','다시 시도','primary'),'<a class="quiet" href="./?page=archive">봉헌 기록</a>',button('home','처음으로'))+'</section>');
   notice();
 }
 async function engine() {
-  enginePromise ??= import('./scene.js?v=13').then(({createWorld}) => {
+  enginePromise ??= import('./scene.js?v=14').then(({createWorld}) => {
     world = createWorld(document.querySelector('#world'),{
       ready(){ if (view==='altar' && stage<3) { notice(); altar(true,false); } },
       loading(name){ const index=scenes.indexOf(name); if(index>=0)segment=index; notice('다음 공간을 불러오는 중입니다.'); },
@@ -338,7 +339,7 @@ async function enterAltar() {
   retry = enterAltar;
   remember(); altar(); notice('제단을 불러오는 중입니다.');
   try { const w=await engine(); if(view==='altar')await w.altar(); }
-  catch { if(view==='altar')errorView(); }
+  catch (error) { if(view==='altar')errorView(error); }
 }
 async function startJourney() {
   retry = startJourney;

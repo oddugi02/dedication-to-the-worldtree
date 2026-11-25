@@ -457,11 +457,12 @@ export function createWorld(host, callbacks) {
     try {
       let loaded=0;
       callbacks.assetProgress?.(0,names.length);
-      const result=await Promise.all(names.map(async name=>{
+      const result=[];
+      for (const name of names) {
         const asset=await model(name);
         if(current===token)callbacks.assetProgress?.(++loaded,names.length);
-        return asset;
-      }));
+        result.push(asset);
+      }
       return current===token ? result : null;
     } catch(error){
       if(current===token){ busy=false;mode='';callbacks.error(error); }
@@ -540,7 +541,6 @@ export function createWorld(host, callbacks) {
       camera.lookAt(altarAim);
       mode='altar';busy=false;render();
       callbacks.ready();
-      void Promise.all(journeyModels.map(model)).catch(()=>{});
     },
     place(surface, onSettled) {
       if(mode!=='altar' || !receptacle) return false;
