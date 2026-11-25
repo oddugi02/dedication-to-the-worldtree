@@ -18,14 +18,19 @@ const loader=new GLTFLoader();
 const assetCache=new Map();
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
 
-function asset(index) {
-  if (!assetCache.has(index)) {
-    assetCache.set(index,loader.loadAsync('./public/assets/ornaments/'+ornamentAssets[index]+'?v=1').catch(error=>{
-      assetCache.delete(index);
+export function preloadIntroOrnaments() {
+  return Promise.allSettled(ornamentAssets.map((_,axis)=>asset(axis,true)));
+}
+
+function asset(index, intro=false) {
+  const filename=intro ? ornamentAssets[index].replace('.glb','-intro.glb') : ornamentAssets[index];
+  if (!assetCache.has(filename)) {
+    assetCache.set(filename,loader.loadAsync('./public/assets/ornaments/'+filename+'?v=1').catch(error=>{
+      assetCache.delete(filename);
       throw error;
     }));
   }
-  return assetCache.get(index);
+  return assetCache.get(filename);
 }
 
 function setGrowth(object, fraction, axis, materials) {
@@ -152,7 +157,7 @@ export function createIntroRenderer(host) {
   resize.observe(host);
   return {
     async reveal(axis) {
-      const model=await asset(axis);
+      const model=await asset(axis,true);
       if (!active) return false;
       scene.add(modelAt(model,axis,posesForGrowth(1,axis)[0],0,materials));
       render();

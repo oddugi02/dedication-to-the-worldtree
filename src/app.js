@@ -1,8 +1,8 @@
 import {life, axes, advance, archiveEntry} from './life.js?v=16';
 import {ornament, loadingOrnament, axisButtons, driftingSilhouettes} from './ornament.js?v=10';
 import {createHomeMotion} from './home-motion.js?v=1';
-import {createOrnamentViewer, prepareAltarOrnament} from './ornament-viewer.js?v=11';
-import {homeIntroMarkup, mountHomeIntro} from './home-intro.js?v=9';
+import {createOrnamentViewer, prepareAltarOrnament} from './ornament-viewer.js?v=12';
+import {homeIntroMarkup, mountHomeIntro} from './home-intro.js?v=10';
 
 const app = document.querySelector('#app');
 document.querySelector('.lives-drift').innerHTML=driftingSilhouettes();
@@ -353,7 +353,7 @@ function errorView(error) {
   notice();
 }
 async function engine() {
-  enginePromise ??= import('./scene.js?v=20').then(({createWorld}) => {
+  enginePromise ??= import('./scene.js?v=21').then(({createWorld}) => {
     world = createWorld(document.querySelector('#world'),{
       ready(){ if (view==='altar' && stage<3) { notice(); altar(true,false); } },
       loading(name){ const index=scenes.indexOf(name); if(index>=0)segment=index; notice('다음 공간을 불러오는 중입니다.'); },

@@ -274,7 +274,7 @@ export function createWorld(host, callbacks) {
   const mote = new THREE.Vector3();
   const altarAim = new THREE.Vector3();
   const overheadPosition = new THREE.Vector3();
-  let closeupStart, closeupTime = 0, openingView;
+  let closeupStart, closeupTime = 0, openingView, treeApproach = 0;
 
   function framePedestal() {
     overheadPosition.set(recessCenter.x,recessCenter.y+Math.max(1.42,1.04/camera.aspect),recessCenter.z+.055);
@@ -282,14 +282,12 @@ export function createWorld(host, callbacks) {
 
   function frameTree() {
     const center = treeBounds.getCenter(target);
-    const size = treeBounds.getSize(pos);
-    const halfFov = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
-    const distance = Math.max(size.y, size.x / Math.max(camera.aspect, .01)) / (2 * halfFov * .9);
-    camera.zoom = 1;
-    camera.position.set(center.x, center.y, treeBounds.max.z + distance);
-    camera.far = Math.max(140, distance + size.z + 20);
+    const approach = THREE.MathUtils.smoothstep(treeApproach,0,1);
+    const distance = THREE.MathUtils.lerp(16.5,15.5,approach);
+    camera.zoom = 2.15 * Math.max(1,camera.aspect / 1.5);
+    camera.position.set(center.x,center.y+1,center.z+distance);
     camera.updateProjectionMatrix();
-    camera.lookAt(center);
+    camera.lookAt(center.x,center.y+.65,center.z);
   }
 
   function resize() {
@@ -297,7 +295,7 @@ export function createWorld(host, callbacks) {
     camera.aspect = host.clientWidth/Math.max(1,host.clientHeight);
     camera.updateProjectionMatrix();
     framePedestal();
-    if (mode==='end') frameTree();
+    if (mode==='end' || mode==='tree-approach') frameTree();
     if (mode==='altar' && closeupStart && closeupTime>=1) {
       camera.position.copy(overheadPosition);
       camera.lookAt(overheadAim);
@@ -377,6 +375,14 @@ export function createWorld(host, callbacks) {
       camera.lookAt(altarAim);
       if (closeupTime===1) closeupStart.onSettled();
     }
+    if (mode==='tree-approach' && !document.hidden) {
+      treeApproach=Math.min(1,treeApproach+dt/1.15);
+      frameTree();
+      if (treeApproach===1) {
+        mode='end';
+        callbacks.done();
+      }
+    }
     if(mode==='journey'){
       const shot = shots[shotIndex];
       const progress = Math.min(1,elapsed/shot.seconds);
@@ -454,14 +460,15 @@ export function createWorld(host, callbacks) {
       callbacks.progress((shots.slice(0,shotIndex).reduce((sum,entry)=>sum+entry.seconds,0)+elapsed)/total);
       if(progress===1){
         if(shotIndex+1===shots.length){
-          mode='end';
+          treeApproach=reduced ? 1 : 0;
+          mode=reduced ? 'end' : 'tree-approach';
           groups.forEach((group,index)=>{ group.visible=index===shots.length; });
           particles.visible=energy.visible=energyHead.visible=false;
           scene.fog.density=.006;
           setAtmosphere(shots.length);
           frameTree();
           fade.style.opacity=0;
-          callbacks.done();
+          if (reduced) callbacks.done();
         }
         else enterShot(shotIndex+1);
       } else if(!paused && !document.hidden) elapsed=Math.min(shot.seconds,elapsed+dt);

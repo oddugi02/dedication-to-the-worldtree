@@ -1,6 +1,6 @@
 import {axes} from './life.js?v=16';
 import {introSilhouettes} from './ornament.js?v=9';
-import {createIntroRenderer} from './ornament-viewer.js?v=11';
+import {createIntroRenderer, preloadIntroOrnaments} from './ornament-viewer.js?v=12';
 import {homeOfferingMarkup, mountHomeOffering} from './home-offering.js?v=4';
 
 const directions=[60,0,-60,-120,180,120];
@@ -92,19 +92,10 @@ export function mountHomeIntro(hero, onComplete, alreadyComplete=false) {
   async function reveal(button,ink) {
     const axis=Number(button.dataset.introAxis);
     button.setAttribute('aria-disabled','true');
-    button.setAttribute('aria-busy','true');
     const silhouette=intro.querySelector(`[data-intro-motif="${axis}"]`);
-    try {
-      renderer ??= createIntroRenderer(intro.querySelector('.intro-models'));
-      await renderer.reveal(axis);
-      if (!active) return;
-      silhouette.classList.add('is-model');
-    } catch {
-      if (!active) return;
-      silhouette.classList.add('is-photo');
-    }
-    button.removeAttribute('aria-busy');
+    silhouette.classList.add('is-photo');
     button.classList.add('is-revealed');
+    void revealModel(axis,silhouette);
     await ink;
     if (!active) return;
     finished++;
@@ -121,11 +112,24 @@ export function mountHomeIntro(hero, onComplete, alreadyComplete=false) {
       },delay);
     }
   }
+  async function revealModel(axis,silhouette) {
+    try {
+      renderer ??= createIntroRenderer(intro.querySelector('.intro-models'));
+      if (await renderer.reveal(axis) && active) {
+        silhouette.classList.replace('is-photo','is-model');
+      }
+    } catch {
+      // The glossy image stays visible if WebGL or the model fails.
+    }
+  }
+
+  const prefetchTimer=setTimeout(()=>{ void preloadIntroOrnaments(); },400);
   let completionTimer;
   intro.addEventListener('click',onClick);
   if (alreadyComplete) intro.querySelectorAll('[data-intro-axis]').forEach(button=>void reveal(button));
   return {dispose(){
     active=false;
+    clearTimeout(prefetchTimer);
     clearTimeout(completionTimer);
     intro.removeEventListener('click',onClick);
     renderer?.dispose();
