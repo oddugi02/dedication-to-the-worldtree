@@ -1,4 +1,3 @@
-import {openOfferingGestures} from './offering-gestures.js?v=2';
 import {life, axes, advance, archiveEntry} from './life.js?v=16';
 import {ornament, loadingOrnament, axisButtons, driftingSilhouettes} from './ornament.js?v=10';
 import {createHomeMotion} from './home-motion.js?v=1';
@@ -17,7 +16,7 @@ let records = [];
 let checkpoint = read(sessionKey, null);
 let view, person, stage = 0, segment = 0, people = [], world, enginePromise, retry;
 let storageFailed = false;
-let ambient, germinationTimer, closeGestures;
+let ambient, germinationTimer;
 let homeMotion, homeIntro, ornamentViewer;
 let homeAwakened=false;
 const radialGuide = '<svg class="radial-guide" viewBox="-108 -102 216 204" aria-hidden="true"><g fill="none"><circle r="16"/><circle r="29"/><circle r="42"/><circle r="55"/><circle r="68"/><circle r="81"/><path d="M-104 0H104" transform="rotate(30)"/><path d="M-104 0H104" transform="rotate(90)"/><path d="M-104 0H104" transform="rotate(150)"/></g></svg>';
@@ -126,8 +125,6 @@ async function toggleAmbient() {
   return true;
 }
 function show(next, body, {scene=false, background='tree', focus=true} = {}) {
-  closeGestures?.();
-  closeGestures=null;
   clearInterval(germinationTimer);
   homeIntro?.dispose();
   homeIntro=null;
@@ -302,14 +299,11 @@ function design() {
   void engine().then(w => w.warmupAltar()).catch(() => {});
 }
 function altar(ready=false, focus=true) {
-  const phases = [['take','장식 집기','장식을 눌러 집으세요.'],['place','제단에 놓기','제단 중앙의 원형 홈에 장식을 놓으세요.'],['offer','봉헌하기','장식에 새겨진 동작을 재현해 빛을 깨우세요.']];
+  const phases = [['take','장식 집기','장식을 눌러 집으세요.'],['place','제단에 놓기','제단 중앙의 원형 홈에 장식을 놓으세요.'],['offer','봉헌하기','봉헌자 이름을 입력하고 봉헌하기를 누르세요.']];
   const [action,label,copy] = phases[Math.min(stage,2)];
   const name = app.querySelector('#officiant-name')?.value ?? '';
-  const form = stage===2
-    ? '<form id="offering-form" class="officiant-form" hidden><label for="officiant-name">봉헌자 이름</label><div><span>관리자</span><input id="officiant-name" name="officiant" type="text" required autocomplete="name" maxlength="40" placeholder="이름 입력" value="'+html(name)+'"><button type="submit" class="primary offer-button" disabled>'+label+'</button></div></form>'
-    : '';
-  const gestures = stage===2
-    ? button('gestures','장식의 손동작 따라 하기','primary gesture-start').replace('<button','<button disabled')+'<dialog class="offering-gestures" aria-labelledby="gesture-title"></dialog>'
+  const form = ready && stage===2
+    ? '<form id="offering-form" class="officiant-form"><label for="officiant-name">봉헌자 이름</label><div><span>관리자</span><input id="officiant-name" name="officiant" type="text" required autocomplete="name" maxlength="40" placeholder="이름 입력" value="'+html(name)+'"><button type="submit" class="primary offer-button" disabled>'+label+'</button></div></form>'
     : '';
   const controlMarkup = !ready
     ? '<div class="altar-loader">'+loadingIndicator('제단 준비 중')+'</div>'
@@ -317,7 +311,7 @@ function altar(ready=false, focus=true) {
     ? '<div class="altar-target placed"><div data-ornament></div></div>'
     : '<button type="button" data-action="'+action+'" class="altar-target '+(stage===1?'held':'')+'"><span class="altar-model"><span data-ornament></span></span><span class="primary altar-action">'+label+'</span></button>';
 
-  show('altar','<section class="altar-ritual" aria-label="봉헌 제단">'+controlMarkup+'<div class="scene-overlay"><h2>'+html(person.name)+'의 장식</h2><p>'+copy+'</p>'+gestures+form+actions(button('back-design','돌아가기'))+'</div></section>',{scene:ready,background:'altar',focus});
+  show('altar','<section class="altar-ritual" aria-label="봉헌 제단">'+controlMarkup+'<div class="scene-overlay"><h2>'+html(person.name)+'의 장식</h2><p>'+copy+'</p>'+form+actions(button('back-design','돌아가기'))+'</div></section>',{scene:ready,background:'altar',focus});
   if (!focus) app.querySelector(stage===2?'#officiant-name':'.altar-target')?.focus({preventScroll:true});
   const control = app.querySelector('.altar-target');
   const record = person;
@@ -328,20 +322,18 @@ function altar(ready=false, focus=true) {
   }
   if (ready && stage===2) {
     const submit = app.querySelector('.offer-button');
-    submit.disabled = true;
-    const start = app.querySelector('.gesture-start');
-    const enableGestures = () => { start.disabled = false; };
+    const enableOffering = () => { submit.disabled = false; };
     void altarRepresentation(record).then(surface => {
       if (!control.isConnected || view!=='altar' || stage!==2) return;
-      if (world.place(surface,enableGestures)) {
+      if (world.place(surface,enableOffering)) {
         control.classList.add('in-recess');
       } else {
-        enableGestures();
+        enableOffering();
         void draw(record,false);
       }
     }).catch(() => {
       if (control.isConnected) {
-        enableGestures();
+        enableOffering();
         void draw(record,false);
       }
     });
@@ -545,18 +537,6 @@ app.addEventListener('click',event=>{
     case 'ornament':design();break;
     case 'altar':void enterAltar();break;
     case 'take':case 'place':ritual(action);break;
-    case 'gestures':{
-      if (view!=='altar' || stage!==2 || control.disabled) break;
-      const dialog=app.querySelector('.offering-gestures');
-      closeGestures=openOfferingGestures(dialog,person,()=>{
-        control.hidden=true;
-        app.querySelector('.scene-overlay > p').textContent='관리자 이름을 입력하고 봉헌하기를 누르세요.';
-        app.querySelector('.officiant-form').hidden=false;
-        app.querySelector('.offer-button').disabled=false;
-        app.querySelector('#officiant-name').focus();
-      });
-      break;
-    }
     case 'resume':resume();break;
     case 'back-life':history.back();break;
     case 'back-home':history.pushState(null,'','./');home();break;
