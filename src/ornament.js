@@ -49,7 +49,39 @@ export function ornament(person, rings = true) {
       '</g>'
     : '';
   return '<svg class="ornament" xmlns="http://www.w3.org/2000/svg" viewBox="-108 -102 216 204" role="img" aria-label="광택 사진을 원본 성장 방향에 맞춰 조합한 식물장식">'+
-    grid+axes.map((_,axis)=>axisGrowth(person.growth[axis],axis,id+'-'+axis)).join('')+'</svg>';
+    grid+axes.map((_,axis)=>'<g data-motif="'+axis+'">'+axisGrowth(person.growth[axis],axis,id+'-'+axis)+'</g>').join('')+'</svg>';
+}
+
+export function introSilhouettes(onlyAxis=null) {
+  const sources=[
+    [0,57,9,131,207,0],[4,26,7,220,207,0],[2,27,13,184,200,0],
+    [3,4,20,246,194,0],[1,38,13,166,200,0],[5,14,56,233,110,-39]
+  ];
+  return axes.map((_,axis)=>{
+    if (onlyAxis!==null && onlyAxis!==axis) return '';
+    const [file,left,top,width,height,turn]=sources[axis];
+    const [x,y]=placements[axis].levels[0][0];
+    const [w,h]=placements[axis].size;
+    return `<g data-intro-motif="${axis}">
+      <g class="intro-source" transform="translate(${x} ${y}) rotate(${turn})">
+        <svg x="${-w/2}" y="${-h/2}" width="${w}" height="${h}" viewBox="${left} ${top} ${width} ${height}">
+          <image href="./public/assets/home-motif-${file}.png" width="260" height="220" filter="url(#intro-monochrome)"/>
+        </svg>
+      </g>
+      <g class="intro-photo">${axisGrowth(1,axis,'intro-'+axis)}</g>
+    </g>`;
+  }).join('');
+}
+
+export function driftingSilhouettes() {
+  return axes.map((_,axis)=>{
+    const [x,y]=placements[axis].levels[0][0];
+    return `<svg viewBox="${x-21} ${y-21} 42 42" style="--drift-delay:-${axis*8}s">
+      <defs><filter id="edge-silhouette-${axis}" color-interpolation-filters="sRGB">
+        <feColorMatrix type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 .88  -.2126 -.7152 -.0722 1 0"/>
+      </filter></defs>${introSilhouettes(axis).replace('#intro-monochrome','#edge-silhouette-'+axis)}
+    </svg>`;
+  }).join('');
 }
 
 export function loadingOrnament() {

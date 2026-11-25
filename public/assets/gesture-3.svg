@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 140">
+  <style>
+    path { stroke:#d9e1b3; stroke-width:2.3; stroke-linecap:round; stroke-linejoin:round }
+    .front { fill:#424d37 }
+    .back { fill:#2d372a; stroke:#a5b28b }
+    .detail { fill:none; stroke:#a5b28b; stroke-width:1.6 }
+  </style>
+  <path class="front" d="M37 120 31 104Q18 92 16 77l-4-22q-1-7 5-8t9 6l8 17-4-33q-1-7 5-8t8 6l6 27-1-34q0-7 7-7t8 8l3 38 5-25q2-7 7-5t5 9l-2 41q-1 15-15 24l3 9"/>
+<path class="back" d="m124 120 6-16q13-12 15-27l4-22q1-7-5-8t-9 6l-8 17 4-33q1-7-5-8t-8 6l-6 27 1-34q0-7-7-7t-8 8l-3 38-5-25q-2-7-7-5t-5 9l2 41q1 15 15 24l-3 9"/>
+<path class="detail" d="M36 78q18-5 30 12m59-12q-18-5-30 12"/>
+</svg>

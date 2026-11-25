@@ -19,7 +19,12 @@ const assetCache=new Map();
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
 
 function asset(index) {
-  if (!assetCache.has(index)) assetCache.set(index,loader.loadAsync('./public/assets/ornaments/'+ornamentAssets[index]+'?v=1'));
+  if (!assetCache.has(index)) {
+    assetCache.set(index,loader.loadAsync('./public/assets/ornaments/'+ornamentAssets[index]+'?v=1').catch(error=>{
+      assetCache.delete(index);
+      throw error;
+    }));
+  }
   return assetCache.get(index);
 }
 
@@ -97,8 +102,70 @@ function modelAt(asset, axis, record, order, materials) {
   group.rotation.z=THREE.MathUtils.degToRad(frame.rotation);
   group.scale.fromArray(frame.scale);
   group.add(crop);
+  group.userData.axis=axis;
   setGrowth(group,record.fraction,axis,materials);
   return group;
+}
+
+export async function prepareAltarOrnament(person) {
+  const models=await Promise.all(ornamentAssets.map((_,axis)=>asset(axis)));
+  return ()=>{
+    const materials=new Set();
+    const group=new THREE.Group();
+    models.forEach((asset,axis)=>{
+      posesForGrowth(person.growth[axis],axis).forEach((pose,order)=>group.add(modelAt(asset,axis,pose,order,materials)));
+    });
+    group.rotation.x=-Math.PI/2;
+    const bounds=new THREE.Box3().setFromObject(group);
+    if (!bounds.isEmpty()) {
+      const size=bounds.getSize(new THREE.Vector3());
+      const center=bounds.getCenter(new THREE.Vector3());
+      const scale=.84/Math.max(size.x,size.z,.001);
+      group.scale.setScalar(scale);
+      group.position.set(-center.x*scale,.026-bounds.min.y*scale,-center.z*scale);
+    }
+    return {group,dispose(){for(const material of materials) material.dispose();}};
+  };
+}
+
+export function createIntroRenderer(host) {
+  const renderer=new THREE.WebGLRenderer({alpha:true,antialias:true});
+  renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));
+  renderer.outputColorSpace=THREE.SRGBColorSpace;
+  renderer.domElement.className='intro-canvas';
+  host.append(renderer.domElement);
+  const scene=new THREE.Scene();
+  const camera=new THREE.OrthographicCamera(-2,2,2,-2,.1,100);
+  camera.position.z=30;
+  const key=new THREE.DirectionalLight('#fff2cc',3.2);
+  key.position.set(-3,4,7);
+  scene.add(new THREE.HemisphereLight('#fff6df','#1a2118',2.2),key);
+  const materials=new Set();
+  let active=true;
+  const render=()=>renderer.render(scene,camera);
+  const resize=new ResizeObserver(()=>{
+    if (!active) return;
+    const {width,height}=host.getBoundingClientRect();
+    renderer.setSize(Math.max(1,width),Math.max(1,height),false);
+    render();
+  });
+  resize.observe(host);
+  return {
+    async reveal(axis) {
+      const model=await asset(axis);
+      if (!active) return false;
+      scene.add(modelAt(model,axis,posesForGrowth(1,axis)[0],0,materials));
+      render();
+      return true;
+    },
+    dispose() {
+      active=false;
+      resize.disconnect();
+      for (const material of materials) material.dispose();
+      renderer.dispose();
+      renderer.domElement.remove();
+    }
+  };
 }
 
 export async function createOrnamentViewer(host, person) {
@@ -194,7 +261,20 @@ export async function createOrnamentViewer(host, person) {
     observer.disconnect();
     throw error;
   }
-  return {dispose(){
+  return {highlight(axis) {
+    for (const group of assembly.children) {
+      const selected=axis===null || group.userData.axis===axis;
+      group.traverse(node=>{
+        if (!node.isMesh) return;
+        for (const material of [node.material].flat()) {
+          if (material.color) {
+            material.userData.originalColor ??= material.color.clone();
+            material.color.copy(material.userData.originalColor).multiplyScalar(selected?1:.30);
+          }
+        }
+      });
+    }
+  },dispose(){
     active=false;
     cancelAnimationFrame(frame);
     observer.disconnect();

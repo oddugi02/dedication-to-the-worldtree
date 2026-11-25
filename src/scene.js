@@ -5,10 +5,8 @@ import { colors } from './life.js';
 const base = './public/assets/';
 const assetVersion = '?v=2';
 const route = [
-  {name:'descent', seconds:35, label:'하강 터널', copy:'봉헌한 장식의 빛을 따라 세계수의 뿌리 안으로 내려갑니다.'},
-  {name:'core', seconds:25, label:'에너지 핵', copy:'장식에 쌓인 동작이 빛으로 흘러들어 세계수의 에너지가 됩니다.'},
-  {name:'ascent', seconds:35, label:'상승 터널', copy:'빛이 흐르는 길을 따라 세계수 밖으로 올라갑니다.'},
-  {name:'rebirth', seconds:25, label:'환생', copy:'씨앗의 틈이 열리고, 세계수의 빛이 들어옵니다.'}
+  {name:'descent', seconds:12, label:'하강 터널', copy:'봉헌한 장식의 빛을 따라 세계수의 뿌리 안으로 내려갑니다.'},
+  {name:'core', seconds:4, label:'에너지 핵', copy:'장식에 쌓인 동작이 빛으로 흘러들어 세계수의 에너지가 됩니다.'}
 ];
 export { route };
 const total = route.reduce((sum, step) => sum + step.seconds, 0);
@@ -62,17 +60,13 @@ function softenedModel(asset, scale, position, feather = .18) {
   return model;
 }
 
-const journeySpeed = 2;
 
 // Each shot stays in front of its original mesh. The blackout hides the handoff.
 const shots = [
-  {chapter:0, seconds:5, from:[0,3.7,6], to:[0,3.9,4.55], aim:[0,1.85,-.65]},
-  {chapter:0, seconds:5, from:[0,2.4,11], to:[0,1.8,8.2], aim:[0,1.5,0]},
-  {chapter:0, seconds:25, from:[0,2.55,10.7], to:[0,2.55,6.8], aim:[0,2.55,0]},
-  {chapter:1, seconds:25, from:[0,-3.65,-18.8], to:[0,-3.65,-19.65], aim:[0,-3.65,-26.1], zoom:1.5},
-  {chapter:2, seconds:28, from:[0,3.2,11], to:[0,5.5,4.8], aim:[0,4.05,0], aimTo:[0,6.2,0], zoom:1.4},
-  {chapter:2, seconds:7, from:[0,2.6,10], to:[0,2.6,7.5], aim:[0,2.6,0]},
-  {chapter:3, seconds:25, from:[0,-.5,-58], to:[0,.8,-68], aim:[0,2,-73]}
+  {chapter:0, seconds:4, from:[0,3.7,6], to:[0,3.9,4.55], aim:[0,1.85,-.65]},
+  {chapter:0, seconds:4, from:[0,2.4,11], to:[0,1.8,8.2], aim:[0,1.5,0]},
+  {chapter:0, seconds:4, from:[0,2.55,10.7], to:[0,2.55,6.8], aim:[0,2.55,0]},
+  {chapter:1, seconds:4, from:[0,-3.65,-18.8], to:[0,-3.65,-19.65], aim:[0,-3.65,-26.1], zoom:1.5}
 ];
 
 const pedestalPosition = [0,1.38,-.4];
@@ -100,18 +94,39 @@ function altarRecess(group, asset, surface) {
   }
   geometry.computeVertexNormals();
 
-  const texture = new THREE.Texture(surface ?? undefined);
+  const texture = new THREE.Texture();
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = 4;
-  texture.needsUpdate = Boolean(surface);
   const ornament = new THREE.Mesh(
     geometry,
     new THREE.MeshBasicMaterial({map:texture,transparent:true,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-1})
   );
   ornament.position.copy(recessCenter);
-  ornament.visible = Boolean(surface);
+  ornament.visible = false;
   group.add(ornament);
-  return {ornament};
+  const recess={ornament,model:null};
+  if (surface) setRecessSurface(recess,surface);
+  return recess;
+}
+
+function setRecessSurface(recess,surface) {
+  const {ornament}=recess;
+  ornament.visible=true;
+  if (typeof surface==='function') {
+    if (!recess.model) {
+      recess.model=surface();
+      ornament.add(recess.model.group);
+    }
+    ornament.material.opacity=0;
+  } else {
+    ornament.material.map.image=surface;
+    ornament.material.map.needsUpdate=true;
+  }
+}
+
+function setRecessVisibility(recess,amount) {
+  if (recess.model) recess.model.group.visible=amount>0;
+  else recess.ornament.material.opacity=amount;
 }
 
 const energyCurves = [
@@ -121,24 +136,6 @@ const energyCurves = [
   [[0,-3.35,-22],[.3,-2.7,-23],[-.28,-2.75,-25],[0,-3,-26.1]]
 ].map(points=>new THREE.CatmullRomCurve3(points.map(point=>new THREE.Vector3(...point))));
 
-function splitShell(asset) {
-  const source = asset.scene.getObjectByProperty('isMesh',true);
-  const points = source.geometry.attributes.position;
-  const indices = source.geometry.index.array;
-  const halves = [[],[]];
-  for (let i=0;i<indices.length;i+=3) {
-    const x = points.getX(indices[i])+points.getX(indices[i+1])+points.getX(indices[i+2]);
-    halves[x<0?0:1].push(indices[i],indices[i+1],indices[i+2]);
-  }
-  return halves.map((faces,index) => {
-    const geometry = source.geometry.clone();
-    geometry.setIndex(faces);
-    const mesh = new THREE.Mesh(geometry,source.material);
-    mesh.scale.setScalar(4);
-    mesh.position.set(index ? -.55 : .55,-2.4,-58.8);
-    return mesh;
-  });
-}
 
 const glowPixels = new Uint8Array(32*32*4);
 for(let y=0;y<32;y++){
@@ -167,9 +164,9 @@ function dust(count, seed, palette, span) {
   return new THREE.Points(geo,new THREE.PointsMaterial({size:.082,map:glow,vertexColors:true,transparent:true,opacity:.76,depthWrite:false,blending:THREE.AdditiveBlending}));
 }
 
-const shotAtmospheres = ['altar','descent','descent','core','ascent','ascent','rebirth'];
+const shotAtmospheres = ['altar','descent','descent','core','tree'];
 const atmosphereColors = {
-  altar:'#453d2c', descent:'#302d22', core:'#46362d', ascent:'#464031', rebirth:'#494938'
+  altar:'#453d2c', descent:'#302d22', core:'#46362d', tree:'#494938'
 };
 
 function makeAtmosphere() {
@@ -259,7 +256,7 @@ export function createWorld(host, callbacks) {
     uniforms.backdrop.value=atmosphereTextures.get(name);
     uniforms.haze.value.set(atmosphereColors[name]);
     scene.fog.color.copy(uniforms.haze.value);
-    const {from,aim}=shots[index];
+    const {from,aim}=shots[index] ?? {from:[0,0,1],aim:[0,0,0]};
     backdropRotation.lookAt(new THREE.Vector3(...from),new THREE.Vector3(...aim),camera.up);
     atmosphere.quaternion.setFromRotationMatrix(backdropRotation);
   }
@@ -271,9 +268,9 @@ export function createWorld(host, callbacks) {
   const euler = new THREE.Euler(0,0,0,'YXZ');
   let mode = '', shotIndex = 0, elapsed = 0, last = 0, raf = 0, token = 0;
   let paused = false, reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  let yaw = 0, pitch = 0, drag, busy = false, groups = [], particles, coreLight, shells = [];
+  let yaw = 0, pitch = 0, drag, busy = false, groups = [], particles, coreLight, coreSpark;
   const softenedMaterials = [];
-  let person, energy, energyHead, receptacle;
+  let person, energy, energyHead, receptacle, treeBounds;
   const mote = new THREE.Vector3();
   const altarAim = new THREE.Vector3();
   const overheadPosition = new THREE.Vector3();
@@ -283,11 +280,24 @@ export function createWorld(host, callbacks) {
     overheadPosition.set(recessCenter.x,recessCenter.y+Math.max(1.42,1.04/camera.aspect),recessCenter.z+.055);
   }
 
+  function frameTree() {
+    const center = treeBounds.getCenter(target);
+    const size = treeBounds.getSize(pos);
+    const halfFov = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+    const distance = Math.max(size.y, size.x / Math.max(camera.aspect, .01)) / (2 * halfFov * .9);
+    camera.zoom = 1;
+    camera.position.set(center.x, center.y, treeBounds.max.z + distance);
+    camera.far = Math.max(140, distance + size.z + 20);
+    camera.updateProjectionMatrix();
+    camera.lookAt(center);
+  }
+
   function resize() {
     renderer.setSize(host.clientWidth,host.clientHeight,false);
     camera.aspect = host.clientWidth/Math.max(1,host.clientHeight);
     camera.updateProjectionMatrix();
     framePedestal();
+    if (mode==='end') frameTree();
     if (mode==='altar' && closeupStart && closeupTime>=1) {
       camera.position.copy(overheadPosition);
       camera.lookAt(overheadAim);
@@ -297,7 +307,7 @@ export function createWorld(host, callbacks) {
   resize();
 
   function look(x,y) {
-    const enclosed = shotIndex>=1 && shotIndex<=5;
+    const enclosed = shotIndex>0;
     const maxYaw = enclosed ? .18 : Math.PI;
     const maxPitch = enclosed ? .13 : 1.18;
     yaw = THREE.MathUtils.clamp(yaw+x,-maxYaw,maxYaw);
@@ -325,19 +335,17 @@ export function createWorld(host, callbacks) {
     fade.style.opacity = 0;
     closeupStart=null;
     for (const material of softenedMaterials.splice(0)) material.dispose();
-    for (const object of [particles,energy,...Object.values(receptacle ?? {})]) {
+    receptacle?.model?.dispose();
+    for (const object of [particles,energy,coreSpark,receptacle?.ornament]) {
       if (!object) continue;
       object.geometry.dispose();
       if (object.material.map && object.material.map !== glow) object.material.map.dispose();
       object.material.dispose();
     }
-    for (const object of shells) object.traverse(mesh => {
-      if (mesh.isMesh) mesh.geometry.dispose();
-    });
     stage.clear();
     energyHead?.material.dispose();
-    groups=[]; shells=[];
-    particles=coreLight=energy=energyHead=receptacle=null;
+    groups=[];
+    particles=coreLight=coreSpark=energy=energyHead=receptacle=null;
   }
   function render() {
     if(!mode) return;
@@ -361,7 +369,7 @@ export function createWorld(host, callbacks) {
       mesh.position.z += 1.05*(1-settle);
       mesh.rotation.x = 1.02*(1-settle);
       mesh.scale.setScalar(1+.65*(1-settle));
-      mesh.material.opacity = THREE.MathUtils.smoothstep(closeupTime,0,.13);
+      setRecessVisibility(receptacle,THREE.MathUtils.smoothstep(closeupTime,0,.13));
 
       const blend = THREE.MathUtils.smoothstep(closeupTime,.28,1);
       camera.position.copy(closeupStart.position).lerp(overheadPosition,blend);
@@ -373,7 +381,7 @@ export function createWorld(host, callbacks) {
       const shot = shots[shotIndex];
       const progress = Math.min(1,elapsed/shot.seconds);
       const travel = reduced ? .5 : shotIndex<3 ? progress**1.65
-        : shotIndex===4 ? progress**1.35 : THREE.MathUtils.smoothstep(progress,0,1);
+        : THREE.MathUtils.smoothstep(progress,0,1);
       pos.fromArray(shot.from);
       target.fromArray(shot.to);
       pos.lerp(target,travel);
@@ -384,16 +392,16 @@ export function createWorld(host, callbacks) {
         pos.fromArray(shot.to).lerp(openingView.position,1-lift);
         target.lerp(openingView.aim,1-lift);
       }
-      const enclosed = shotIndex>=1 && shotIndex<=5;
+      const enclosed = shotIndex>0;
       const closeup = shotIndex===0 ? THREE.MathUtils.smoothstep(progress,.12,.82) : 1;
       const zoom = enclosed
-        ? (shot.zoom ?? [1,1.75,2.15,1.95,2.15,1.8][shotIndex])*Math.max(1,camera.aspect/1.65)
-        : 1+(shotIndex===0?.08:.14)*closeup;
+        ? (shot.zoom ?? [1,1.75,2.15][shotIndex])*Math.max(1,camera.aspect/1.65)
+        : 1+.08*closeup;
       if(Math.abs(camera.zoom-zoom)>.0005) {
         camera.zoom=zoom;
         camera.updateProjectionMatrix();
       }
-      const fadeSeconds = reduced ? .6 : 1.15;
+      const fadeSeconds = reduced ? .15 : .25;
       const fadeIn = shotIndex===0 ? 0 : 1-THREE.MathUtils.smoothstep(elapsed,0,fadeSeconds);
       const fadeOut = shotIndex<shots.length-1
         ? THREE.MathUtils.smoothstep(elapsed,shot.seconds-fadeSeconds,shot.seconds)
@@ -403,9 +411,9 @@ export function createWorld(host, callbacks) {
       energy.visible = energyHead.visible = Boolean(curve);
       if(curve) {
         const flow = shotIndex===3
-          ? THREE.MathUtils.smoothstep(elapsed,0,5.5)
+          ? THREE.MathUtils.smoothstep(progress,0,.66)
           : THREE.MathUtils.clamp((progress-.12)/.88,0,1)**1.65;
-        const absorb = shotIndex===3 ? THREE.MathUtils.smoothstep(elapsed,4.2,6.1) : 0;
+        const absorb = shotIndex===3 ? THREE.MathUtils.smoothstep(progress,.53,.77) : 0;
         const light = THREE.MathUtils.smoothstep(progress,0,shotIndex===0?.22:.07)*(1-absorb);
         const stream = energy.geometry.attributes.position;
         curve.getPointAt(flow,energyHead.position);
@@ -421,33 +429,42 @@ export function createWorld(host, callbacks) {
         }
         stream.needsUpdate=true;
         if(shotIndex===0 && receptacle){
-          receptacle.ornament.material.opacity=1-THREE.MathUtils.smoothstep(progress,.2,.78);
+          const remaining=1-THREE.MathUtils.smoothstep(progress,.2,.78);
+          if(receptacle.model) receptacle.ornament.scale.setScalar(Math.max(.001,remaining));
+          setRecessVisibility(receptacle,remaining);
         }
         if(shotIndex===3){
-          const flare = THREE.MathUtils.smoothstep(elapsed,3.8,5.1)
-            * (1-THREE.MathUtils.smoothstep(elapsed,5.4,8));
+          const flare = THREE.MathUtils.smoothstep(progress,.42,.62)
+            * (1-THREE.MathUtils.smoothstep(progress,.68,.94));
           coreLight.intensity=flare*12;
+          const release=THREE.MathUtils.smoothstep(progress,.67,1);
+          coreSpark.material.opacity=Math.sin(Math.PI*release)*.9;
+          coreSpark.scale.setScalar(.2+release*1.4);
+          coreSpark.rotation.y=release*.4;
         }
       }
-      const open = shot.chapter===3 ? THREE.MathUtils.smoothstep(progress,.12,.64) : 0;
-      shells.forEach((shell,index) => {
-        const side = index===0 ? -1 : 1;
-        shell.position.x=side*(open*3-.55);
-        shell.rotation.y=side*open*.9;
-      });
       camera.position.copy(pos);
       camera.lookAt(target);
       orientation.copy(camera.quaternion);
-      offset.setFromEuler(euler.set(pitch,yaw,0,'YXZ'));
+      const lookWeight=shot.chapter===1 ? .20 : 1;
+      offset.setFromEuler(euler.set(pitch*lookWeight,yaw*lookWeight,0,'YXZ'));
       camera.quaternion.copy(orientation).multiply(offset);
       particles.position.z=pos.z;
       particles.position.y=pos.y;
       callbacks.progress((shots.slice(0,shotIndex).reduce((sum,entry)=>sum+entry.seconds,0)+elapsed)/total);
-      if(!paused && !document.hidden) elapsed += dt*journeySpeed;
-      if(elapsed>=shot.seconds){
-        if(shotIndex+1===shots.length){mode='end';callbacks.done();}
+      if(progress===1){
+        if(shotIndex+1===shots.length){
+          mode='end';
+          groups.forEach((group,index)=>{ group.visible=index===shots.length; });
+          particles.visible=energy.visible=energyHead.visible=false;
+          scene.fog.density=.006;
+          setAtmosphere(shots.length);
+          frameTree();
+          fade.style.opacity=0;
+          callbacks.done();
+        }
         else enterShot(shotIndex+1);
-      }
+      } else if(!paused && !document.hidden) elapsed=Math.min(shot.seconds,elapsed+dt);
     }
     render();
   }
@@ -470,7 +487,7 @@ export function createWorld(host, callbacks) {
       return null;
     }
   }
-  const journeyModels = ['altar','root-entry','descent','core','ascent','bark-exit','tree','grounds','seed-shell','altar-pedestal'];
+  const journeyModels = ['altar','root-entry','descent','core','tree','altar-pedestal'];
 
   async function preload(names) {
     for (const name of names) {
@@ -496,28 +513,34 @@ export function createWorld(host, callbacks) {
     callbacks.loading(route[index].name);
     const data=await load(journeyModels,current);
     if(!data) return;
-    const [altar,entry,descent,core,ascent,exit,tree,grounds,seed,pedestal]=data;
+    const [altar,entry,descent,core,tree,pedestal]=data;
     clearStage();
-    shells = splitShell(seed);
-    groups = shots.map(()=>new THREE.Group());
+    scene.fog.density=.029;
+    camera.far=140;
+    camera.updateProjectionMatrix();
+    groups = Array.from({length:shots.length+1},()=>new THREE.Group());
     groups[0].add(scaled(altar,14,[0,-.25,-1]));
     receptacle=altarRecess(groups[0],pedestal,surface);
     const chamberModels = [
       [entry,13,[0,-.65,0]],
       [descent,15,[0,-.8,0]],
-      [core,13,[0,-6.9,-30]],
-      [ascent,15,[0,-.8,0]],
-      [exit,13,[0,-.65,0]]
+      [core,13,[0,-6.9,-30]]
     ];
     chamberModels.forEach(([asset,scale,position],index) => {
-      const chamber=softenedModel(asset,scale,position,index===2 || index===3 ? .06 : .18);
+      const chamber=softenedModel(asset,scale,position,index===2 ? .06 : .18);
       chamber.traverse(mesh => { if (mesh.isMesh) softenedMaterials.push(mesh.material); });
       groups[index+1].add(chamber);
     });
-    groups[6].add(scaled(tree,16,[0,-1.1,-70]),scaled(grounds,20,[0,-2.9,-72]),...shells);
+    const exterior = scaled(tree,16,[0,-1.1,-70]);
+    treeBounds = new THREE.Box3().setFromObject(exterior,true);
+    groups[shots.length].add(exterior);
     stage.add(...groups);
     coreLight=new THREE.PointLight('#ffe3aa',0,8,2);
     coreLight.position.set(0,-3,-26.1);
+    coreSpark=dust(140,person.seed,['#fff9db','#ffe6a2','#ffffff'],3.5);
+    coreSpark.position.set(0,-3.5,-24);
+    coreSpark.material.size=.052;
+    coreSpark.material.opacity=0;
     energy=dust(220,person.seed,['#fff2bc','#ffd17b','#fff9e6'],1);
     energy.frustumCulled=false;
     energy.material.size=.13;
@@ -527,7 +550,7 @@ export function createWorld(host, callbacks) {
       map:glow,color:'#ffe6a0',transparent:true,depthWrite:false,blending:THREE.AdditiveBlending
     }));
     energyHead.visible=energy.visible=false;
-    groups[3].add(coreLight);
+    groups[3].add(coreLight,coreSpark);
     stage.add(particles,energy,energyHead);
     mode='journey';
     busy=false;
@@ -541,7 +564,9 @@ export function createWorld(host, callbacks) {
       clearStage();
       stage.add(scaled(data[0],14,[0,-.25,-1]));
       receptacle=altarRecess(stage,data[1]);
+      scene.fog.density=.029;
       camera.zoom=1;
+      camera.far=140;
       camera.updateProjectionMatrix();
       setAtmosphere(0);
       camera.position.fromArray(shots[0].from);
@@ -555,8 +580,7 @@ export function createWorld(host, callbacks) {
     place(surface, onSettled) {
       if(mode!=='altar' || !receptacle) return false;
       const mesh = receptacle.ornament;
-      mesh.material.map.image = surface;
-      mesh.material.map.needsUpdate = true;
+      setRecessSurface(receptacle,surface);
       mesh.visible = true;
       if (!closeupStart) {
         closeupStart={position:camera.position.clone(),aim:altarAim.clone(),onSettled};
@@ -570,7 +594,7 @@ export function createWorld(host, callbacks) {
           mesh.position.set(recessCenter.x,recessCenter.y+.26,recessCenter.z+1.05);
           mesh.rotation.x=1.02;
           mesh.scale.setScalar(1.65);
-          mesh.material.opacity=0;
+          setRecessVisibility(receptacle,0);
         }
       } else if (closeupTime===1) {
         onSettled();

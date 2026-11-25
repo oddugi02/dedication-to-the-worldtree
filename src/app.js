@@ -1,22 +1,25 @@
-import {particle} from './biography.js?v=3';
+import {openOfferingGestures} from './offering-gestures.js?v=2';
 import {life, axes, advance, archiveEntry} from './life.js?v=16';
-import {ornament, loadingOrnament, axisButtons} from './ornament.js?v=7';
+import {ornament, loadingOrnament, axisButtons, driftingSilhouettes} from './ornament.js?v=10';
 import {createHomeMotion} from './home-motion.js?v=1';
-import {createOrnamentViewer} from './ornament-viewer.js?v=9';
+import {createOrnamentViewer, prepareAltarOrnament} from './ornament-viewer.js?v=11';
+import {homeIntroMarkup, mountHomeIntro} from './home-intro.js?v=9';
 
 const app = document.querySelector('#app');
+document.querySelector('.lives-drift').innerHTML=driftingSilhouettes();
 const status = document.querySelector('#status');
 const backdrop = document.querySelector('#backdrop');
 const archiveKey = 'world-tree:archive:1';
-const scenes = ['descent','core','ascent','rebirth'];
+const scenes = ['descent','core'];
 const sessionKey = 'world-tree:checkpoint:1';
 const entryPrefix = archiveKey + ':';
 let records = [];
 let checkpoint = read(sessionKey, null);
 let view, person, stage = 0, segment = 0, people = [], world, enginePromise, retry;
 let storageFailed = false;
-let ambient;
-let captionTimer, homeMotion, ornamentViewer;
+let ambient, germinationTimer, closeGestures;
+let homeMotion, homeIntro, ornamentViewer;
+let homeAwakened=false;
 const radialGuide = '<svg class="radial-guide" viewBox="-108 -102 216 204" aria-hidden="true"><g fill="none"><circle r="16"/><circle r="29"/><circle r="42"/><circle r="55"/><circle r="68"/><circle r="81"/><path d="M-104 0H104" transform="rotate(30)"/><path d="M-104 0H104" transform="rotate(90)"/><path d="M-104 0H104" transform="rotate(150)"/></g></svg>';
 const html = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 
@@ -51,7 +54,7 @@ function remember() {
   checkpoint = {person,stage,segment};
   save(sessionKey, checkpoint);
 }
-const button = (action, text, cls = 'quiet') => '<button type="button" class="'+cls+'" data-action="'+action+'">'+text+'</button>';
+const button = (action, text, cls = 'quiet') => '<button type="button" class="'+cls+(action.startsWith('back')?' back-link':'')+'" data-action="'+action+'">'+text+'</button>';
 const meta = p => '제'+html(p.region)+'구역 · '+html(p.job)+' · '+html(p.gender)+' · 향년 '+html(p.age)+'세';
 function story(profile) {
   const names = new Map((profile.relationships ?? []).flatMap(({name},index)=>{
@@ -123,7 +126,11 @@ async function toggleAmbient() {
   return true;
 }
 function show(next, body, {scene=false, background='tree', focus=true} = {}) {
-  clearTimeout(captionTimer);
+  closeGestures?.();
+  closeGestures=null;
+  clearInterval(germinationTimer);
+  homeIntro?.dispose();
+  homeIntro=null;
   homeMotion?.dispose();
   homeMotion=null;
   ornamentViewer?.dispose();
@@ -137,6 +144,7 @@ function show(next, body, {scene=false, background='tree', focus=true} = {}) {
   document.body.className = [next==='archive'?'archive':'', ['lives','ornament','linked-life'].includes(next)?'interior':'', scene?'scene-3d':''].filter(Boolean).join(' ');
   backdrop.style.backgroundImage = 'url("./public/assets/'+background+'.webp")';
   app.innerHTML = body;
+  if(next==='lives'||next==='archive') app.querySelector('.layout')?.insertAdjacentHTML('afterbegin',button('back-home','돌아가기'));
   app.setAttribute('aria-busy',String(next==='loading' || (next==='altar' && !scene)));
   document.querySelector('#archive-link').setAttribute('aria-current',next==='archive'?'page':'false');
   document.title = next==='archive'?'봉헌 기록 · 플로렘':'플로렘 - 세계수 봉헌의식';
@@ -202,6 +210,10 @@ async function draw(record, rings=true) {
 }
 const altarSurfaces = new WeakMap();
 
+function altarRepresentation(record) {
+  return prepareAltarOrnament(record).catch(()=>altarSurface(record));
+}
+
 function altarSurface(record) {
   if (!altarSurfaces.has(record)) {
     const pending = (async () => {
@@ -252,8 +264,10 @@ const axisInfo = profile => '<div class="axes" aria-label="동작별 성장값�
 
 function home() {
   world?.stop();
-  show('home','<section class="hero"><div class="hero-copy"><h1>세계수<br>봉헌의식</h1><p class="description">플로렘에는 반인반식(半人半植) 생명체들이 어머니 세계수 아래에 마을을 지어 살아간다. 각 인물의 삶의 척도는 특별한 식물 장식으로 기록된다. 이 장식은 사후 세계수에게 바쳐지는 &#39;세계수 봉헌의식&#39;을 거쳐 에너지로 흡수되고, 이내 새로운 씨앗으로 환생한다.</p>'+actions(button('lives','<span class="label">봉헌할 장식 살펴보기</span><span class="arrow" aria-hidden="true"></span>','offering-link'))+'</div><div class="hero-bottom"><span>세계수 앞 제단</span><span>인물 선택 · 장식 봉헌 · 환생</span></div></section>');
-  homeMotion=createHomeMotion(app.querySelector('.hero'));
+  show('home','<section class="hero"><div class="hero-copy"><h1>세계수<br>봉헌의식</h1><p class="description">플로렘에는 반인반식(半人半植) 생명체들이 어머니 세계수 아래에 마을을 지어 살아간다. 각 인물의 삶의 척도는 특별한 식물 장식으로 기록된다. 이 장식은 사후 세계수에게 바쳐지는 &#39;세계수 봉헌의식&#39;을 거쳐 에너지로 흡수되고, 이내 새로운 씨앗으로 환생한다.</p>'+actions(button('lives','<span class="label">봉헌할 장식 살펴보기</span><span class="arrow" aria-hidden="true"></span>','offering-link'))+'</div><div class="hero-bottom"><span>세계수 앞 제단</span><span>인물 선택 · 장식 봉헌 · 환생</span></div>'+homeIntroMarkup()+'</section>',{focus:homeAwakened});
+  const hero=app.querySelector('.hero');
+  homeMotion=createHomeMotion(hero);
+  homeIntro=mountHomeIntro(hero,()=>{homeAwakened=true;},homeAwakened);
 }
 function generate() {
   const batch = new Map();
@@ -274,28 +288,36 @@ function lives(index=0, focus=true) {
   if (!focus) app.querySelector('[data-index="'+index+'"]')?.focus({preventScroll:true});
 }
 function design() {
-  show('ornament','<section class="layout">'+heading(html(person.name)+'의 식물장식')+'<div class="two-columns ornament-layout"><article class="detail"><p class="meta">'+meta(person)+'</p><p>삶에 쌓인 여섯 동작이 나이테를 따라 자랐습니다.</p>'+axisInfo(person)+actions(button('altar','제단으로','primary'),button('back','인물 목록'))+'</article><figure class="ornament-viewer" data-ornament-viewer>'+radialGuide+'<div data-ornament></div><figcaption>드래그하여 장식을 360도로 돌려보고, 스크롤하여 확대 또는 축소할 수 있습니다.</figcaption></figure></div></section>');
+  show('ornament','<section class="layout">'+heading(html(person.name)+'의 식물장식')+'<div class="two-columns ornament-layout"><article class="detail"><p class="meta">'+meta(person)+'</p><p>삶에 쌓인 여섯 동작이 나이테를 따라 자랐습니다.</p>'+axisInfo(person)+story(person)+actions(button('altar','제단으로','primary'),button('back','인물 목록'))+'</article><figure class="ornament-viewer" data-ornament-viewer>'+radialGuide+'<div data-ornament></div><figcaption>드래그하여 장식을 360도로 돌려보고, 스크롤하여 확대 또는 축소할 수 있습니다.</figcaption></figure></div></section>');
   draw(person,false);
-  void createOrnamentViewer(app.querySelector('[data-ornament-viewer]'),person).then(viewer=>{
-    if (view==='ornament') ornamentViewer=viewer;
+  const host=app.querySelector('[data-ornament-viewer]');
+  void createOrnamentViewer(host,person).then(viewer=>{
+    if (host.isConnected) {
+      ornamentViewer=viewer;
+      const selected=app.querySelector('[data-axis][aria-pressed="true"]');
+      if (selected) viewer.highlight(Number(selected.dataset.axis));
+    }
     else viewer.dispose();
   }).catch(()=>notice('3D 장식을 불러오지 못해 기본 장식으로 표시합니다.'));
   void engine().then(w => w.warmupAltar()).catch(() => {});
 }
 function altar(ready=false, focus=true) {
-  const phases = [['take','장식 집기','장식을 눌러 집으세요.'],['place','제단에 놓기','제단 중앙의 원형 홈에 장식을 놓으세요.'],['offer','봉헌하기','관리자 이름을 입력하고 봉헌하기를 누르세요.']];
+  const phases = [['take','장식 집기','장식을 눌러 집으세요.'],['place','제단에 놓기','제단 중앙의 원형 홈에 장식을 놓으세요.'],['offer','봉헌하기','장식에 새겨진 동작을 재현해 빛을 깨우세요.']];
   const [action,label,copy] = phases[Math.min(stage,2)];
   const name = app.querySelector('#officiant-name')?.value ?? '';
   const form = stage===2
-    ? '<form id="offering-form" class="officiant-form"><label for="officiant-name">봉헌자 이름</label><div><span>관리자</span><input id="officiant-name" name="officiant" type="text" required autocomplete="name" maxlength="40" placeholder="이름 입력" value="'+html(name)+'"><button type="submit" class="offer-button" disabled>'+label+'</button></div></form>'
+    ? '<form id="offering-form" class="officiant-form" hidden><label for="officiant-name">봉헌자 이름</label><div><span>관리자</span><input id="officiant-name" name="officiant" type="text" required autocomplete="name" maxlength="40" placeholder="이름 입력" value="'+html(name)+'"><button type="submit" class="primary offer-button" disabled>'+label+'</button></div></form>'
+    : '';
+  const gestures = stage===2
+    ? button('gestures','장식의 손동작 따라 하기','primary gesture-start').replace('<button','<button disabled')+'<dialog class="offering-gestures" aria-labelledby="gesture-title"></dialog>'
     : '';
   const controlMarkup = !ready
     ? '<div class="altar-loader">'+loadingIndicator('제단 준비 중')+'</div>'
     : stage===2
     ? '<div class="altar-target placed"><div data-ornament></div></div>'
-    : '<button type="button" data-action="'+action+'" '+(ready?'':'disabled')+' class="altar-target '+(stage===1?'held':'')+'"><div data-ornament></div><span>'+(ready?label:'제단 준비 중')+'</span></button>';
+    : '<button type="button" data-action="'+action+'" class="altar-target '+(stage===1?'held':'')+'"><span class="altar-model"><span data-ornament></span></span><span class="primary altar-action">'+label+'</span></button>';
 
-  show('altar','<section class="altar-ritual" aria-label="봉헌 제단">'+controlMarkup+'<div class="scene-overlay"><h2>'+html(person.name)+'의 장식</h2><p>'+copy+'</p>'+form+actions(button('back','인물 목록'))+'</div></section>',{scene:ready,background:'altar',focus});
+  show('altar','<section class="altar-ritual" aria-label="봉헌 제단">'+controlMarkup+'<div class="scene-overlay"><h2>'+html(person.name)+'의 장식</h2><p>'+copy+'</p>'+gestures+form+actions(button('back-design','돌아가기'))+'</div></section>',{scene:ready,background:'altar',focus});
   if (!focus) app.querySelector(stage===2?'#officiant-name':'.altar-target')?.focus({preventScroll:true});
   const control = app.querySelector('.altar-target');
   const record = person;
@@ -307,23 +329,30 @@ function altar(ready=false, focus=true) {
   if (ready && stage===2) {
     const submit = app.querySelector('.offer-button');
     submit.disabled = true;
-    const enableOffer = () => { submit.disabled = false; };
-    void altarSurface(record).then(surface => {
+    const start = app.querySelector('.gesture-start');
+    const enableGestures = () => { start.disabled = false; };
+    void altarRepresentation(record).then(surface => {
       if (!control.isConnected || view!=='altar' || stage!==2) return;
-      if (world.place(surface,enableOffer)) {
+      if (world.place(surface,enableGestures)) {
         control.classList.add('in-recess');
       } else {
-        enableOffer();
+        enableGestures();
         void draw(record,false);
       }
     }).catch(() => {
       if (control.isConnected) {
-        enableOffer();
+        enableGestures();
         void draw(record,false);
       }
     });
-  } else {
-    void draw(record,false);
+  } else if (ready) {
+    const host=control.querySelector('.altar-model');
+    void createOrnamentViewer(host,record).then(viewer=>{
+      if (host.isConnected) {
+        ornamentViewer=viewer;
+        host.querySelector('canvas').tabIndex=-1;
+      } else viewer.dispose();
+    }).catch(()=>{if (host.isConnected) void draw(record,false);});
   }
 }
 function errorView(error) {
@@ -332,7 +361,7 @@ function errorView(error) {
   notice();
 }
 async function engine() {
-  enginePromise ??= import('./scene.js?v=15').then(({createWorld}) => {
+  enginePromise ??= import('./scene.js?v=20').then(({createWorld}) => {
     world = createWorld(document.querySelector('#world'),{
       ready(){ if (view==='altar' && stage<3) { notice(); altar(true,false); } },
       loading(name){ const index=scenes.indexOf(name); if(index>=0)segment=index; notice('다음 공간을 불러오는 중입니다.'); },
@@ -360,12 +389,12 @@ async function enterAltar() {
 async function startJourney() {
   retry = startJourney;
   const record = person;
-  const chapter = segment;
+  const chapter = Math.min(segment, scenes.length - 1);
   const wasAtAltar = view==='altar' && document.body.classList.contains('scene-3d');
-  show('loading','<section class="scene-overlay loading-state"><h2>세계수 안으로</h2><p>잠시 후 장식의 시점으로 이동합니다.</p>'+loadingIndicator('공간을 준비하고 있습니다.')+'</section>',{scene:wasAtAltar,background:'altar'});
+  show('loading','<section class="scene-overlay loading-state"><h2>세계수 안으로</h2><p>잠시 후 장식의 시점으로 이동합니다.</p>'+loadingIndicator('공간을 준비하고 있습니다.')+button('back-design','돌아가기')+'</section>',{scene:wasAtAltar,background:'altar'});
   try {
     const w=await engine();
-    const surface=chapter===0 ? await altarSurface(record) : undefined;
+    const surface=chapter===0 ? await altarRepresentation(record) : undefined;
     if(view==='loading' && person===record) w.start(record,chapter,surface);
   } catch {
     if(view==='loading' && person===record)errorView();
@@ -381,14 +410,14 @@ function ritual(action, officiant='') {
   if(stage<3){remember();altar(ready,false);return;}
   loadArchive();
   records=archiveEntry(records,person,new Date().toISOString(),officiant);
-  save(entryPrefix+person.id,records.find(entry=>entry.person.id===person.id));
+  germinationDeadline(records.find(entry=>entry.person.id===person.id));
   remember();
   void startJourney();
 }
-function journey(step,index) {
-  const chapters=['하강','핵','상승','환생'];
-  show('journey','<section class="scene-overlay journey-panel"><div class="journey-heading"><h2>'+step.label+'</h2><button type="button" class="quiet" data-action="caption" aria-expanded="true" aria-controls="scene-description">설명 닫기</button></div><div id="scene-description" class="scene-description"><p>'+step.copy+'</p><p class="look-hint">드래그 또는 방향키로 둘러보기</p></div><div class="journey-controls">'+button('pause','일시정지')+button('look','정면 보기')+button('reduce',world.reduced?'움직임 완화 켜짐':'움직임 완화')+button('audio',ambient?'환경음 끄기':'환경음 켜기')+'</div><div class="journey-track" aria-label="여정 단계">'+chapters.map((label,i)=>'<span '+(i===index?'aria-current="step"':'')+'>'+label+'</span>').join('')+'</div><progress class="journey-progress" max="1" value="0" aria-label="전체 여정 진행"></progress></section>',{scene:true,background:step.name});
-  if(!world.reduced)captionTimer=setTimeout(()=>setCaption(false),6500);
+function journey(step) {
+  const captionOpen=app.querySelector('[data-action="caption"]')?.getAttribute('aria-expanded')==='true';
+  show('journey','<section class="scene-overlay journey-panel"><div class="journey-heading"><h2>'+step.label+'</h2><button type="button" class="quiet" data-action="caption" aria-expanded="false" aria-controls="scene-description">장면 설명</button></div><div id="scene-description" hidden class="scene-description"><p>'+step.copy+'</p><p class="look-hint">드래그 또는 방향키로 둘러보기</p></div><div class="journey-controls">'+button('pause','일시정지')+button('look','정면 보기')+button('reduce',world.reduced?'움직임 완화 켜짐':'움직임 완화')+button('audio',ambient?'환경음 끄기':'환경음 켜기')+button('back-design','돌아가기')+'</div><progress class="journey-progress" max="1" value="0" aria-label="전체 여정 진행"></progress></section>',{scene:true,background:step.name});
+  if(captionOpen)setCaption(true);
 }
 function setCaption(open) {
   const control=app.querySelector('[data-action="caption"]');
@@ -398,14 +427,55 @@ function setCaption(open) {
   control.setAttribute('aria-expanded',String(open));
   control.textContent=open?'설명 닫기':'장면 설명';
 }
+function germinationDeadline(record) {
+  if (Number.isFinite(record.germinatesAt)) return record.germinatesAt;
+  const seconds = 3600 + Math.floor(Math.random() * 21600);
+  record.germinatesAt = Date.parse(record.date) + seconds * 1000;
+  save(entryPrefix + record.person.id, record);
+  return record.germinatesAt;
+}
+
+function showGerminationCountdown(deadline) {
+  const output = app.querySelector('[data-germination]');
+  const update = () => {
+    const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+    const hours = Math.floor(remaining / 3600);
+    const minutes = Math.floor(remaining / 60) % 60;
+    output.textContent = remaining
+      ? `환생한 씨앗은 ${hours}시간 ${minutes}분 ${remaining % 60}초 후 발아합니다`
+      : '환생한 씨앗이 발아했습니다.';
+    if (!remaining) clearInterval(germinationTimer);
+  };
+  germinationTimer = setInterval(update, 1000);
+  update();
+}
+
 function ending() {
-  const name = person.name;
-  const seconds = 3600 + (person.seed >>> 0) % (6 * 3600);
-  const hours = Math.floor(seconds / 3600);
-  const minutes = String(Math.floor(seconds / 60) % 60).padStart(2,'0');
-  const remainder = String(seconds % 60).padStart(2,'0');
-  const differentiation = hours+'시간 '+minutes+'분 '+remainder+'초';
-  show('ending','<section class="scene-overlay"><h2>환생</h2><p>'+html(name)+'의 장식이 봉헌된 뒤 '+html(particle(name,'가','이'))+' 새로운 씨앗으로 환생했습니다. 약 '+differentiation+' 이후에 분화합니다.</p>'+actions('<a class="primary" href="./?page=archive#'+html(person.id)+'">봉헌한 삶 다시 보기</a>',button('lives','다른 삶 봉헌하기'))+'</section>',{scene:true,background:'rebirth'});
+  const record=records.find(entry=>entry.person.id===person.id);
+  const profile=record?.person ?? person;
+  const summary=profile.story?.[2] ?? profile.story?.[0] ?? '';
+  const date=record?.date?new Date(record.date).toLocaleDateString('ko-KR'):'미기록';
+  const officiant=record?.officiant?'관리자 '+record.officiant:'미기록';
+  show('ending',`<div class="offering-result"><section class="offering-certificate" aria-labelledby="certificate-title">
+    <button class="certificate-close" type="button" data-action="certificate-close" aria-label="봉헌 증명서 닫기">×</button>
+    <h2 id="certificate-title">봉헌 증명서</h2>
+    <p>${html(person.name)}의 식물장식을 세계수에 봉헌했습니다.</p>
+    <div class="certificate-life">
+      <div class="certificate-illustration" role="img" aria-label="${html(profile.name)}의 식물장식 실루엣">
+        <div aria-hidden="true">${ornament(profile,false)}</div>
+      </div>
+      <div><h3>삶의 요약</h3><p class="certificate-meta">${meta(profile)}</p><p>${html(summary)}</p></div>
+    </div>
+    <dl>
+      <div><dt>봉헌자</dt><dd>${html(officiant)}</dd></div>
+      <div><dt>봉헌일</dt><dd>${html(date)}</dd></div>
+    </dl>
+    ${record?.date ? '<p class="certificate-germination" data-germination></p>' : ''}
+  </section>
+    <button class="quiet certificate-reopen" type="button" data-action="certificate-open" hidden>봉헌 증명서 열기</button>
+    ${actions('<a class="primary" href="./?page=archive#'+html(person.id)+'">봉헌한 삶 다시 보기</a>',button('lives','다른 삶 봉헌하기'))}
+  </div>`,{scene:true,background:'tree'});
+  if (record?.date) showGerminationCountdown(germinationDeadline(record));
 }
 function archive(index,focus=true) {
   world?.stop();
@@ -453,9 +523,16 @@ app.addEventListener('click',event=>{
   }
   const axis=event.target.closest('[data-axis]');
   if(axis){
-    for(const item of app.querySelectorAll('[data-axis]'))item.setAttribute('aria-pressed',String(item===axis));
-    const index=Number(axis.dataset.axis);
-    app.querySelector('.evidence').textContent=axes[index]+' · '+person.evidence[index];
+    const index=axis.getAttribute('aria-pressed')==='true'?null:Number(axis.dataset.axis);
+    const evidence=index===null?'':person.evidence?.[index];
+    const paragraphs=[...app.querySelectorAll('.story p')];
+    const matchingEvent=paragraphs.find(paragraph=>evidence && paragraph.textContent===evidence);
+    for(const item of app.querySelectorAll('[data-axis]'))item.setAttribute('aria-pressed',String(index!==null && item===axis));
+    for(const motif of app.querySelectorAll('[data-motif]'))motif.classList.toggle('motif-muted',index!==null && Number(motif.dataset.motif)!==index);
+    for(const paragraph of paragraphs)paragraph.classList.toggle('story-highlight',paragraph===matchingEvent);
+    ornamentViewer?.highlight(index);
+    app.querySelector('.evidence').textContent=index===null?'동작을 선택해 관련 기록을 확인하세요.':
+      evidence?axes[index]+' · '+evidence:'관련 기록이 없습니다.';
     return;
   }
   const control=event.target.closest('[data-action]');
@@ -468,8 +545,31 @@ app.addEventListener('click',event=>{
     case 'ornament':design();break;
     case 'altar':void enterAltar();break;
     case 'take':case 'place':ritual(action);break;
+    case 'gestures':{
+      if (view!=='altar' || stage!==2 || control.disabled) break;
+      const dialog=app.querySelector('.offering-gestures');
+      closeGestures=openOfferingGestures(dialog,person,()=>{
+        control.hidden=true;
+        app.querySelector('.scene-overlay > p').textContent='관리자 이름을 입력하고 봉헌하기를 누르세요.';
+        app.querySelector('.officiant-form').hidden=false;
+        app.querySelector('.offer-button').disabled=false;
+        app.querySelector('#officiant-name').focus();
+      });
+      break;
+    }
     case 'resume':resume();break;
     case 'back-life':history.back();break;
+    case 'back-home':history.pushState(null,'','./');home();break;
+    case 'back-design':world?.stop();design();break;
+    case 'certificate-close':case 'certificate-open':{
+      const open=action==='certificate-open';
+      const certificate=app.querySelector('.offering-certificate');
+      const reopen=app.querySelector('.certificate-reopen');
+      certificate.hidden=!open;
+      reopen.hidden=open;
+      (open?certificate.querySelector('.certificate-close'):reopen).focus();
+      break;
+    }
     case 'back':lives(Math.max(0,people.findIndex(p=>p.id===person.id)));break;
     case 'record':history.replaceState(null,'','#'+records[index].person.id);archive(index,false);break;
     case 'audio':
@@ -477,7 +577,7 @@ app.addEventListener('click',event=>{
       void toggleAmbient().then(on=>{control.textContent=on?'환경음 끄기':'환경음 켜기';}).catch(()=>notice('환경음을 재생할 수 없습니다.')).finally(()=>{control.disabled=false;});
       break;
     case 'pause':control.textContent=world.pause()?'다시 이동':'일시정지';break;
-    case 'caption':clearTimeout(captionTimer);setCaption(control.getAttribute('aria-expanded')!=='true');break;
+    case 'caption':setCaption(control.getAttribute('aria-expanded')!=='true');break;
     case 'look':world.resetLook();break;
     case 'reduce':control.textContent=world.reduce()?'움직임 완화 켜짐':'움직임 완화';break;
     case 'retry':void retry?.();break;
